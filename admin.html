@@ -1,104 +1,119 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<title>管理者メンバー管理</title>
-<style>
-  body { font-family: sans-serif; padding: 20px; }
-  button { margin-left: 10px; }
-</style>
+  <meta charset="UTF-8" />
+  <title>管理者画面</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    .team {
+      background-color: white;
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 10px;
+    }
+    .team h2 {
+      font-size: 20px;
+      margin: 0 0 10px;
+      color: #333;
+    }
+    .team ul {
+      padding-left: 20px;
+    }
+    .team li {
+      margin: 5px 0;
+    }
+  </style>
 </head>
 <body>
 
-<h1>チームメンバー管理</h1>
-
-<div>
-  <label>ログインユーザー名: <input type="text" id="username" /></label>
-  <button onclick="loadTeam()">チーム情報読み込み</button>
-</div>
-
-<div id="teamInfo" style="display:none;">
-  <h2>チーム: <span id="teamName"></span></h2>
-  <h3>メンバー一覧</h3>
-  <ul id="memberList"></ul>
-</div>
+<h1>管理者ページ</h1>
+<div id="teamContainer">読み込み中...</div>
 
 <script>
-const GAS_URL = "https://script.google.com/macros/s/AKfycbwd30WDFLM5ElwUioTGtZr-0k8sR-zLkIt5yh5dwd9lC4xttukg0d6OLzA7yCzJRra-/exec";
-let teamData = null;
-let currentUser = "";
+  const DOC_ID = "1PX99t1fYuCHARkHEgIb9FaEoLJrxLRUzav5Z_dSYqhI";
+  const DOC_TXT_URL = `https://docs.google.com/document/d/${DOC_ID}/export?format=txt`;
 
-async function loadTeam() {
-  currentUser = document.getElementById("username").value.trim();
-  if (!currentUser) {
-    alert("ユーザー名を入力してください");
-    return;
-  }
+  const params = new URLSearchParams(location.search);
+  const username = params.get("username");
 
-  const res = await fetch(GAS_URL + "?username=" + encodeURIComponent(currentUser));
-  const text = await res.text();
-
-  try {
-    teamData = JSON.parse(text);
-  } catch {
-    alert("チーム情報の取得に失敗しました");
-    return;
-  }
-
-  if (!teamData.team) {
-    alert("このユーザーはどのチームにも所属していません");
-    document.getElementById("teamInfo").style.display = "none";
-    return;
-  }
-
-  if (teamData.team.owner !== currentUser) {
-    alert("管理者ではありません。メンバー管理はできません。");
-    document.getElementById("teamInfo").style.display = "none";
-    return;
-  }
-
-  document.getElementById("teamName").textContent = teamData.team.name;
-
-  const ul = document.getElementById("memberList");
-  ul.innerHTML = "";
-
-  teamData.team.members.forEach(member => {
-    const li = document.createElement("li");
-    li.textContent = member;
-
-    const btn = document.createElement("button");
-    btn.textContent = "削除";
-    btn.onclick = () => removeMember(member);
-
-    li.appendChild(btn);
-    ul.appendChild(li);
-  });
-
-  document.getElementById("teamInfo").style.display = "block";
-}
-
-async function removeMember(member) {
-  if (!confirm(member + " さんをチームから削除しますか？")) return;
-
-  const form = new URLSearchParams();
-  form.append("action", "removeMember");
-  form.append("username", currentUser);
-  form.append("team", teamData.team.name);
-  form.append("member", member);
-
-  const res = await fetch(GAS_URL, {
-    method: "POST",
-    body: form
-  });
-  const text = await res.text();
-
-  if (text === "OK") {
-    alert(member + " さんを削除しました");
-    loadTeam();
+  if (!username) {
+    alert("ログインされてません");
+    location.href = "login.html";
   } else {
-    alert("削除に失敗しました: " + text);
+    loadOwnedTeams(username);
   }
-}
+
+  async function loadOwnedTeams(ownerName) {
+    try {
+      const res = await fetch(DOC_TXT_URL);
+      const text = await res.text();
+
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      let currentTeam = null;
+      const teams = {}; // { teamName: [members] }
+
+      for (const line of lines) {
+        if (!line.startsWith("-")) {
+          const [owner, teamName] = line.split("*");
+          if (owner === ownerName) {
+            currentTeam = teamName;
+            teams[currentTeam] = [];
+          } else {
+            currentTeam = null;
+          }
+        } else if (currentTeam) {
+          teams[currentTeam].push(line.slice(1).trim());
+        }
+      }
+
+      const container = document.getElementById("teamContainer");
+      container.innerHTML = "";
+
+      const teamNames = Object.keys(teams);
+      if (teamNames.length === 0) {
+        container.innerHTML = "<p>あなたが管理するチームはありません。</p>";
+        return;
+      }
+
+      for (const name of teamNames) {
+        const div = document.createElement("div");
+        div.className = "team";
+
+        const h2 = document.createElement("h2");
+        h2.textContent = `チーム名: ${name}`;
+        div.appendChild(h2);
+
+        const ul = document.createElement("ul");
+        for (const member of teams[name]) {
+          const li = document.createElement("li");
+          li.textContent = member;
+          ul.appendChild(li);
+        }
+
+        if (teams[name].length === 0) {
+          const li = document.createElement("li");
+          li.textContent = "メンバーなし";
+          ul.appendChild(li);
+        }
+
+        div.appendChild(ul);
+        container.appendChild(div);
+      }
+
+    } catch (e) {
+      console.error("読み込み失敗:", e);
+      document.getElementById("teamContainer").innerHTML = "<p>読み込みに失敗しました。</p>";
+    }
+  }
 </script>
 
 </body>
