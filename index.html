@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ダッシュボード</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      display: flex;
+      height: 100vh;
+    }
+    .main {
+      flex: 1;
+      padding: 40px;
+    }
+    .sidebar {
+      width: 250px;
+      background-color: #2f3136;
+      color: white;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .user {
+      font-weight: bold;
+      margin-bottom: 20px;
+      font-size: 18px;
+    }
+    .user-list h3 {
+      margin-top: 0;
+      font-size: 16px;
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+    .user-list ul {
+      list-style: none;
+      padding: 0;
+    }
+    .user-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid #444;
+      font-size: 14px;
+    }
+    .button {
+      display: inline-block;
+      margin: 10px 5px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #5865F2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .google {
+      background-color: #4285F4;
+    }
+    .logout {
+      background-color: #f04747;
+      margin-top: 20px;
+    }
+  </style>
+  <style>
+    body {
+      scroll-behavior: smooth;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="main">
+    <h1 id="welcome">ようこそ！</h1>
+    <p>何をしますか？</p>
+    <a class="button" href="https://discord.com/app" target="_blank">Discordを開く</a>
+    <a class="button google" href="https://www.google.com" target="_blank">Google検索</a>
+    <br /><br />
+    <p>
+      チームに所属したいですか?
+      <a id="teamLink" href="#">ここ</a>から所属しましょう。
+    </p>
+
+    <!-- 管理者画面へボタン（最初は非表示） -->
+    <button id="adminBtn" style="display:none;">管理者画面へ</button>
+
+    <br /><br />
+    <button class="button logout" onclick="logout()">ログアウト</button>
+  </div>
+
+  <div class="sidebar">
+    <div class="user" id="username">あなた: （未ログイン）</div>
+    <div class="user-list">
+      <h3>ログイン中ユーザー</h3>
+      <ul id="userlist">
+        <li>読み込み中...</li>
+      </ul>
+    </div>
+  </div>
+
+<script>
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbyjnptWaedrp2flTpH0Mp2hwGuXuPDrTaQbVtVwbQH1hpTsMJx0Yih5hE4Lefl0a4IZ/exec";
+  const DOC_ID = "1PX99t1fYuCHARkHEgIb9FaEoLJrxLRUzav5Z_dSYqhI";
+  const DOC_TXT_URL = `https://docs.google.com/document/d/${DOC_ID}/export?format=txt`;
+
+  // URLパラメータからusernameを一度だけ取得
+  const params = new URLSearchParams(window.location.search);
+  const username = params.get("username") || "";
+
+  // チームリンクにユーザー名をセット
+  document.getElementById("teamLink").href = `team.html?username=${encodeURIComponent(username)}`;
+
+  // ユーザー表示＆ようこそメッセージ
+  if (username) {
+    document.getElementById("username").textContent = `あなた: ${username}`;
+    document.getElementById("welcome").textContent = `${username} さん、ようこそ！`;
+
+    // GASにログイン通知
+    fetch(GAS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `username=${encodeURIComponent(username)}`
+    }).catch(console.error);
+
+    // 管理者判定＆ボタン表示
+    checkAdmin(username);
+
+    // チーム所属取得（必要なら表示などに使ってね）
+    loadTeamData(username).then(teamName => {
+      console.log("所属チーム:", teamName || "なし");
+    });
+  }
+
+  // ログイン中ユーザー一覧取得
+  fetch(GAS_URL)
+    .then(res => res.json())
+    .then(users => {
+      const ul = document.getElementById("userlist");
+      ul.innerHTML = "";
+      users.forEach(u => {
+        const li = document.createElement("li");
+        li.textContent = u;
+        ul.appendChild(li);
+      });
+    })
+    .catch(err => {
+      const ul = document.getElementById("userlist");
+      ul.innerHTML = "<li>読み込み失敗</li>";
+      console.error(err);
+    });
+
+  // 管理者判定
+  async function checkAdmin(username) {
+    try {
+      const res = await fetch(GAS_URL + "?action=getAdmins");
+      const admins = await res.json();
+
+      if (admins.includes(username)) {
+        const btn = document.getElementById("adminBtn");
+        btn.style.display = "inline-block";
+        btn.onclick = () => {
+          location.href = `admin.html?username=${encodeURIComponent(username)}`;
+        };
+      }
+    } catch (e) {
+      console.error("管理者判定エラー:", e);
+    }
+  }
+
+  // チームデータ読み込み（Googleドキュメントテキスト取得）
+  async function loadTeamData(loginUser) {
+    try {
+      const res = await fetch(DOC_TXT_URL);
+      const text = await res.text();
+
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line !== "");
+      let currentTeam = null;
+      let userTeam = null;
+
+      for (const line of lines) {
+        if (!line.startsWith("-")) {
+          const parts = line.split("*");
+          if (parts.length >= 2) {
+            const owner = parts[0];
+            const teamName = parts[1];
+            currentTeam = teamName;
+            if (owner === loginUser) {
+              userTeam = teamName;
+            }
+          }
+        } else {
+          const memberName = line.slice(1).trim();
+          if (memberName === loginUser && !userTeam) {
+            userTeam = currentTeam;
+          }
+        }
+      }
+      return userTeam;
+    } catch (e) {
+      console.error("チームデータ取得エラー:", e);
+      return null;
+    }
+  }
+
+  // ログアウト処理
+  function logout() {
+    document.cookie = "loginUser=; max-age=0; path=/";
+
+    if (username) {
+      fetch(GAS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `logout=${encodeURIComponent(username)}`
+      }).catch(console.error);
+    }
+
+    window.location.href = "login.html";
+  }
+</script>
+
+</body>
+</html>

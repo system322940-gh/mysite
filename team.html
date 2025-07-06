@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>チーム作成・所属ページ</title>
+</head>
+<body>
+  <h1>ようこそ、<span id="userNameDisplay"></span> さん</h1>
+
+  <section>
+    <h2>新しいチームを作成</h2>
+    <input id="newTeam" placeholder="チーム名" />
+    <input id="newPass" type="password" placeholder="パスワード" />
+    <button onclick="createTeam()">チームを作成</button>
+    <p id="createStatus" style="color:red;"></p>
+  </section>
+
+  <hr />
+
+  <section>
+    <h2>既存チームに所属する</h2>
+    <input id="team" placeholder="チーム名" />
+    <input id="password" type="password" placeholder="チームパスワード" />
+    <button onclick="joinTeam()">所属する</button>
+    <p id="joinStatus" style="color:red;"></p>
+  </section>
+
+  <script>
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbxyIEhTCPdv2lTdgjJoJWTEzx39fUeDAt9f8DxlVnZ9Ef_Xbcd2DsyVIooWhEFyR9qM/exec";
+
+    // URLパラメータからusernameを取得
+    function getLoginUser() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("username") ? decodeURIComponent(params.get("username")) : null;
+    }
+
+    const username = getLoginUser();
+
+    document.getElementById("userNameDisplay").textContent = username || "未ログイン";
+
+    if (!username) {
+      alert("ログインされていません。");
+      // 必要ならリダイレクト
+      // window.location.href = "login.html";
+    }
+
+    async function createTeam() {
+      const team = document.getElementById("newTeam").value.trim();
+      const password = document.getElementById("newPass").value.trim();
+      const status = document.getElementById("createStatus");
+      status.style.color = "red";
+      status.textContent = "";
+
+      if (!username) {
+        status.textContent = "ログインしていません。";
+        return;
+      }
+      if (!team || !password) {
+        status.textContent = "チーム名とパスワードを入力してください。";
+        return;
+      }
+
+      try {
+        const res = await fetch(GAS_URL, {
+          method: "POST",
+          headers: {"Content-Type": "application/x-www-form-urlencoded"},
+          body: `createTeam=true&username=${encodeURIComponent(username)}&team=${encodeURIComponent(team)}&password=${encodeURIComponent(password)}`
+        });
+        const text = await res.text();
+
+        if (text === "TEAM_EXISTS") {
+          status.textContent = `チーム「${team}」はすでに存在します。`;
+        } else if (text === "CREATED") {
+          status.style.color = "green";
+          status.textContent = `チーム「${team}」を作成しました！`;
+        } else {
+          status.textContent = `エラーが発生しました: ${text}`;
+        }
+      } catch(e) {
+        status.textContent = "通信エラーが発生しました。";
+      }
+    }
+
+    async function joinTeam() {
+      const team = document.getElementById("team").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const status = document.getElementById("joinStatus");
+      status.style.color = "red";
+      status.textContent = "";
+
+      if (!username) {
+        status.textContent = "ログインしていません。";
+        return;
+      }
+      if (!team || !password) {
+        status.textContent = "チーム名とパスワードを入力してください。";
+        return;
+      }
+
+      try {
+        const res = await fetch(GAS_URL, {
+          method: "POST",
+          headers: {"Content-Type": "application/x-www-form-urlencoded"},
+          body: `username=${encodeURIComponent(username)}&team=${encodeURIComponent(team)}&password=${encodeURIComponent(password)}`
+        });
+        const text = await res.text();
+
+        if (text === "OK") {
+          status.style.color = "green";
+          status.textContent = `${team} に所属しました！`;
+        } else if (text === "ALREADY") {
+          status.textContent = `すでに ${team} に所属しています。`;
+        } else if (text === "WRONG_PASSWORD") {
+          status.textContent = "パスワードが間違っています。";
+        } else if (text === "NOT_FOUND") {
+          status.textContent = `チーム「${team}」は存在しません。`;
+        } else {
+          status.textContent = `エラーが発生しました: ${text}`;
+        }
+      } catch(e) {
+        status.textContent = "通信エラーが発生しました。";
+      }
+    }
+  </script>
+</body>
+</html>

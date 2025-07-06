@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ログイン</title>
+  <style>
+    body { font-family: sans-serif; max-width: 400px; margin: auto; padding: 20px; }
+    input, button { width: 100%; padding: 8px; margin: 10px 0; }
+    .success { color: green; font-weight: bold; }
+    .error { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>ログイン</h2>
+  <input type="text" id="username" placeholder="ユーザー名">
+  <input type="password" id="password" placeholder="パスワード">
+  <button onclick="login()">ログイン</button>
+  <p id="message"></p>
+
+  <script>
+    async function login() {
+      const name = document.getElementById("username").value.trim();
+      const pass = document.getElementById("password").value;
+      const msg = document.getElementById("message");
+
+      msg.textContent = "";
+      msg.className = "";
+
+      if (!name || !pass) {
+        msg.textContent = "名前とパスワードを入力してね";
+        msg.className = "error";
+        return;
+      }
+
+      const scriptUrl = "https://script.google.com/macros/s/AKfycbxb0GpN7L8iKtRX8k1Go19LbB5DK-V7av9RmFV-_p1_3nhsoeXbZvT9Au86XX2mrEd0SA/exec";
+
+      try {
+        const res = await fetch(scriptUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: `username=${encodeURIComponent(name)}&password=${encodeURIComponent(pass)}`
+        });
+
+        const text = await res.text();
+        if (text.includes("成功")) {
+          msg.textContent = `${name} さん、ログイン成功！リダイレクト中...`;
+          msg.className = "success";
+          setTimeout(() => {
+            window.location.href = `index.html?username=${encodeURIComponent(name)}`;
+          }, 1500);
+        } else {
+          msg.textContent = "ログイン失敗。名前かパスワードが違います。";
+          msg.className = "error";
+        }
+      } catch (err) {
+        msg.textContent = "通信エラー";
+        msg.className = "error";
+        console.error(err);
+      }
+    }
+  </script>
+  <p>アカウントがありませんか?<a href="siginup.html">作成</a>しましょう</p>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>管理者メンバー管理</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; }
+  button { margin-left: 10px; }
+</style>
+</head>
+<body>
+
+<h1>チームメンバー管理</h1>
+
+<div>
+  <label>ログインユーザー名: <input type="text" id="username" /></label>
+  <button onclick="loadTeam()">チーム情報読み込み</button>
+</div>
+
+<div id="teamInfo" style="display:none;">
+  <h2>チーム: <span id="teamName"></span></h2>
+  <h3>メンバー一覧</h3>
+  <ul id="memberList"></ul>
+</div>
+
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwd30WDFLM5ElwUioTGtZr-0k8sR-zLkIt5yh5dwd9lC4xttukg0d6OLzA7yCzJRra-/exec";
+let teamData = null;
+let currentUser = "";
+
+async function loadTeam() {
+  currentUser = document.getElementById("username").value.trim();
+  if (!currentUser) {
+    alert("ユーザー名を入力してください");
+    return;
+  }
+
+  const res = await fetch(GAS_URL + "?username=" + encodeURIComponent(currentUser));
+  const text = await res.text();
+
+  try {
+    teamData = JSON.parse(text);
+  } catch {
+    alert("チーム情報の取得に失敗しました");
+    return;
+  }
+
+  if (!teamData.team) {
+    alert("このユーザーはどのチームにも所属していません");
+    document.getElementById("teamInfo").style.display = "none";
+    return;
+  }
+
+  if (teamData.team.owner !== currentUser) {
+    alert("管理者ではありません。メンバー管理はできません。");
+    document.getElementById("teamInfo").style.display = "none";
+    return;
+  }
+
+  document.getElementById("teamName").textContent = teamData.team.name;
+
+  const ul = document.getElementById("memberList");
+  ul.innerHTML = "";
+
+  teamData.team.members.forEach(member => {
+    const li = document.createElement("li");
+    li.textContent = member;
+
+    const btn = document.createElement("button");
+    btn.textContent = "削除";
+    btn.onclick = () => removeMember(member);
+
+    li.appendChild(btn);
+    ul.appendChild(li);
+  });
+
+  document.getElementById("teamInfo").style.display = "block";
+}
+
+async function removeMember(member) {
+  if (!confirm(member + " さんをチームから削除しますか？")) return;
+
+  const form = new URLSearchParams();
+  form.append("action", "removeMember");
+  form.append("username", currentUser);
+  form.append("team", teamData.team.name);
+  form.append("member", member);
+
+  const res = await fetch(GAS_URL, {
+    method: "POST",
+    body: form
+  });
+  const text = await res.text();
+
+  if (text === "OK") {
+    alert(member + " さんを削除しました");
+    loadTeam();
+  } else {
+    alert("削除に失敗しました: " + text);
+  }
+}
+</script>
+
+</body>
+</html>
